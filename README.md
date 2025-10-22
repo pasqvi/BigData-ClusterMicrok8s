@@ -11,6 +11,7 @@ Before you start, make sure you have:
 - A virtual machine running **Ubuntu 25.04**
 - A **PC with ARM64 architecture** (e.g., any Apple MacBook with M1–M5 chips)
 - Sufficient **RAM** and **CPU cores** for cluster operations
+- Configure the Virtual Machine network settings to use **Bridged** mode
 - *(Optional)* Two or more additional PCs (any architecture) running Ubuntu — for multi-node setups
 
 ---
