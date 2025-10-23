@@ -9,7 +9,6 @@ This repository provides a comprehensive guide for setting up a MicroK8s cluster
 Before you start, make sure you have:
 
 #### Master Node Setup
-- A virtual machine running **Ubuntu 25.04**
 - A **PC with ARM64 architecture** (e.g., any Apple MacBook with M1–M5 chips)
     - Install a Virtual Machine running **Ubuntu 25.04**
     - Configure the Virtual Machine network settings to use **Bridged** mode
