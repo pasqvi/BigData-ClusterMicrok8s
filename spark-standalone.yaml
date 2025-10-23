@@ -5,7 +5,7 @@ metadata:
   name: spark
 
 ---
-# Service HEADLESS per discovery (usato da StatefulSet e driver)
+# Headless Service: fornisce DNS per i pod del master (necessario allo StatefulSet)
 apiVersion: v1
 kind: Service
 metadata:
@@ -13,6 +13,7 @@ metadata:
   namespace: spark
 spec:
   clusterIP: None
+  publishNotReadyAddresses: true
   selector:
     app: spark
     role: master
@@ -25,7 +26,7 @@ spec:
       targetPort: 8080
 
 ---
-# UI del master esposta via NodePort (solo per browser)
+# UI del master esposta via NodePort fisso
 apiVersion: v1
 kind: Service
 metadata:
@@ -43,7 +44,67 @@ spec:
       nodePort: 30085
 
 ---
+# Master come StatefulSet: nome DNS stabile spark-master-0.spark-master-hs.spark.svc.cluster.local
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: spark-master
+  namespace: spark
+spec:
+  serviceName: spark-master-hs
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark
+      role: master
+  template:
+    metadata:
+      labels:
+        app: spark
+        role: master
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: master
+          image: docker.io/library/spark:3.5.1
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash","-lc"]
+          args:
+            - |
+              export SPARK_MASTER_PORT=7077
+              export SPARK_MASTER_WEBUI_PORT=8080
+              # Bind e advertise su FQDN STABILE del pod (StatefulSet + headless service)
+              /opt/spark/sbin/start-master.sh \
+                --host spark-master-0.spark-master-hs.spark.svc.cluster.local \
+                --port 7077 \
+                --webui-port 8080 && \
+              tail -f /opt/spark/logs/*master*.out
+          env:
+            - name: SPARK_NO_DAEMONIZE
+              value: "true"
+            # Opzionale: usato solo per i link della UI
+            - name: SPARK_PUBLIC_DNS
+              value: "spark-master-0.spark-master-hs.spark.svc.cluster.local"
+          ports:
+            - name: rpc
+              containerPort: 7077
+            - name: ui
+              containerPort: 8080
+          readinessProbe:
+            tcpSocket:
+              port: 7077
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
 
+---
+# Worker come DaemonSet (uno per nodo)
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -68,7 +129,8 @@ spec:
           command: ["/bin/bash","-lc"]
           args:
             - |
-              /opt/spark/sbin/start-worker.sh spark://spark-master-hs.spark.svc.cluster.local:7077 && \
+              /opt/spark/sbin/start-worker.sh \
+                spark://spark-master-0.spark-master-hs.spark.svc.cluster.local:7077 && \
               tail -f /opt/spark/logs/*worker*.out
           ports:
             - name: ui
@@ -77,9 +139,9 @@ spec:
             - name: SPARK_NO_DAEMONIZE
               value: "true"
             - name: SPARK_WORKER_CORES
-              value: "4"        
+              value: "4"
             - name: SPARK_WORKER_MEMORY
-              value: "6g"       
+              value: "6g"
           resources:
             requests:
               cpu: "2"
